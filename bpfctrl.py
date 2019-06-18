@@ -67,7 +67,7 @@ def parser_creation():
                          type=convert_to_ip_value, default=[], help=des['add'])
     actions.add_argument('-r', '--remove', metavar=('IP1', 'IP2'), nargs='+',
                          type=convert_to_ip, default=[], help=des['remove'])
-    actions.add_argument('-d', '--dump', action='store_true',
+    actions.add_argument('-d', '--dump', nargs='?',
                          default=False, help=des['dump'])
 
     return parser
@@ -110,11 +110,13 @@ def map_modification(map, action, ips, values=[]):
         subprocess.call(command)
 
 
-def map_dump(map):
+def map_dump(map, path):
     """
         Dump the eBPF map given into a JSON file.
 
         :param map: path to the eBPF map
+        :param path: path to the file in which the dump will be stored,
+                     None if the dump is disply on stdout
 
         :return: None
     """
@@ -129,8 +131,11 @@ def map_dump(map):
         val = int(val_hex, 16)
         output.append((ip, val))
     output = dict(output)
-    with open('map.json', 'w') as file:
-        json.dump(output, file, indent=4)
+    if path == None:
+        print(json.dumps(output, indent=4))
+    else:
+        with open(path, 'w') as file:
+            json.dump(output, file, indent=4)
 
 
 def main():
@@ -140,8 +145,8 @@ def main():
     add_value = list(map(lambda pos: pos[1], args.add))
     map_modification(eBPF_map, "update", add_ips, add_value)
     map_modification(eBPF_map, "delete", args.remove)
-    if args.dump == True:
-        map_dump(eBPF_map)
+    if args.dump != False:
+        map_dump(eBPF_map, args.dump)
 
 
 if __name__ == '__main__':
