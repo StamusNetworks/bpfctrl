@@ -48,7 +48,7 @@ def parser_creation():
            'add': 'add all the ip adresses given in the eBPF map at the \
                    associated values',
            'remove': 'remove all the ip adresses given in the eBPF map',
-           'dump': 'dump the eBPF map into a JSON file',
+           'dump': 'dump the eBPF map, stored into a file if <path> is precised',
            # action group help
            'actions': 'At least one action is needed. Adding are done before removing.'}
 
@@ -67,7 +67,7 @@ def parser_creation():
                          type=convert_to_ip_value, default=[], help=des['add'])
     actions.add_argument('-r', '--remove', metavar=('IP1', 'IP2'), nargs='+',
                          type=convert_to_ip, default=[], help=des['remove'])
-    actions.add_argument('-d', '--dump', nargs='?',
+    actions.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                          default=False, help=des['dump'])
 
     return parser
