@@ -1,5 +1,6 @@
 import argparse
 import ipaddress
+import json
 import subprocess
 
 
@@ -7,7 +8,7 @@ def convert_to_ip(ip):
     """
         Convert a string into an IP address.
 
-        :param ip: the ip to convert, can be like X.X.X.X or X.X.X.X.X.X, or
+        :param ip: the ip to convert, can be like X.X.X.X or X:X:X:X:X:X, or
                    an int (decimal notation) converted into a string
 
         :return: an ip address
@@ -23,12 +24,11 @@ def convert_to_ip_value(ipval):
     """
         Convert a string into an IP address and the value associated.
 
-        :param ip: the ip to convert, can be like X.X.X.X or X.X.X.X.X.X, or
-                   an int (decimal notation) converted into a string
+        TODO
 
         :return: an array like [ip, value]
     """
-    res = ipval.split(':')
+    res = ipval.split('=')
     if len(res) == 1:
         res.append('')
     res[0] = convert_to_ip(res[0])
@@ -48,7 +48,7 @@ def parser_creation():
            'add': 'add all the ip adresses given in the eBPF map at the \
                    associated values',
            'remove': 'remove all the ip adresses given in the eBPF map',
-           'dump': 'dump the eBPF map',
+           'dump': 'dump the eBPF map into a JSON file',
            # action group help
            'actions': 'At least one action is needed. Adding are done before removing.'}
 
@@ -63,10 +63,10 @@ def parser_creation():
 
     actions = parser.add_argument_group(
         title='ACTIONS', description=des['actions'])
-    actions.add_argument('-a', '--add', metavar=('ip:value'), nargs='*',
+    actions.add_argument('-a', '--add', metavar=('IP=value'), nargs='+',
                          type=convert_to_ip_value, default=[], help=des['add'])
-    actions.add_argument('-r', '--remove', metavar=('ip1', 'ip2'), nargs='*',
-                         type=convert2ip, default=[], help=des['remove'])
+    actions.add_argument('-r', '--remove', metavar=('IP1', 'IP2'), nargs='+',
+                         type=convert_to_ip, default=[], help=des['remove'])
     actions.add_argument('-d', '--dump', action='store_true',
                          default=False, help=des['dump'])
 
@@ -101,10 +101,10 @@ def map_modification(map, action, ips, values=[]):
     """
     for i in range(len(ips)):
         ip = str(ips[i]).split(".")
-        val = str(values[i]).split(".")
         command = ["bpftool", "map", action, "pinned", map, "key"]
         command.extend(ip)
         if action == "update":
+            val = str(values[i]).split(".")
             command.append("value")
             command.extend(val)
         subprocess.call(command)
@@ -112,13 +112,25 @@ def map_modification(map, action, ips, values=[]):
 
 def map_dump(map):
     """
-        Dump the eBPF map given.
+        Dump the eBPF map given into a JSON file.
 
         :param map: path to the eBPF map
 
         :return: None
     """
-    subprocess.call(["bpftool", "map", "dump", "pinned", map])
+    call = subprocess.run(["bpftool", "map", "dump", "pinned",
+                           map, "-j"], encoding='utf-8', stdout=subprocess.PIPE)
+    res = json.loads(call.stdout)
+    output = []
+    for i in res:
+        ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['key']])
+        ip = str(ipaddress.ip_address(bytes.fromhex(ip_hex)))
+        val_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['value']])
+        val = int(val_hex, 16)
+        output.append((ip, val))
+    output = dict(output)
+    with open('map.json', 'w') as file:
+        json.dump(output, file, indent=4)
 
 
 def main():
