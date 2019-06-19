@@ -6,10 +6,10 @@ A bpftool wrapper to handle eBPF maps.
 You need to install ```bpftool``.
 
 ```
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/
-cd linux/tools/bpf/bpftool/
-sudo make install
-sudo make doc-install
+$ git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/
+$ cd linux/tools/bpf/bpftool/
+$ make && sudo make install
+$ sudo make doc-install
 ```
 
 ## Wiki
