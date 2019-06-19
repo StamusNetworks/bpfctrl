@@ -48,7 +48,7 @@ def parser_creation():
            'add': 'add all the ip adresses given in the eBPF map at the \
                    associated values',
            'remove': 'remove all the ip adresses given in the eBPF map',
-           'dump': 'dump the eBPF map, stored into a file if <path> is precised',
+           'dump': 'dump the eBPF map on stdout or in a file if <path> is precised',
            # action group help
            'actions': 'At least one action is needed. Adding are done before removing.'}
 
