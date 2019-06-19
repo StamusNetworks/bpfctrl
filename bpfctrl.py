@@ -1,6 +1,7 @@
 import argparse
 import ipaddress
 import json
+import socket
 import subprocess
 
 
@@ -17,7 +18,16 @@ def convert_to_ip(ip):
         ip = ipaddress.ip_address(int(ip))
     except:
         ip = ipaddress.ip_address(ip)
+    ip_int = int(ipaddress.ip_address(ip))
+    ip = ipaddress.ip_address(socket.htonl(ip_int))
     return ip
+
+
+def convert_to_value(val):
+    """
+        TODO
+    """
+    return ipaddress.ip_address(int(val))
 
 
 def convert_to_ip_value(ipval):
@@ -32,7 +42,7 @@ def convert_to_ip_value(ipval):
     if len(res) == 1:
         res.append('')
     res[0] = convert_to_ip(res[0])
-    res[1] = convert_to_ip(res[1])
+    res[1] = convert_to_value(res[1])
     return res
 
 
@@ -126,7 +136,8 @@ def map_dump(map, path):
     output = []
     for i in res:
         ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['key']])
-        ip = str(ipaddress.ip_address(bytes.fromhex(ip_hex)))
+        ip_int = int(ipaddress.ip_address(bytes.fromhex(ip_hex)))
+        ip = str(ipaddress.ip_address(socket.ntohl(ip_int)))
         val_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['value']])
         val = int(val_hex, 16)
         output.append((ip, val))
