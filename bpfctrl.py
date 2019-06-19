@@ -59,6 +59,7 @@ def parser_creation():
                    associated values',
            'remove': 'remove all the ip adresses given in the eBPF map',
            'dump': 'dump the eBPF map on stdout or in a file if <path> is precised',
+           'cpu': 'If dump option is activated, display the value for each cpu.',
            # action group help
            'actions': 'At least one action is needed. Adding are done before removing.'}
 
@@ -68,9 +69,6 @@ def parser_creation():
     path = parser.add_argument_group()
     path.add_argument('-m', '--map', required=True, nargs=1, help=des['map'])
 
-    options = parser.add_argument_group(title='OPTIONS')
-    options.add_argument('-h', '--help', action='help', help=des['help'])
-
     actions = parser.add_argument_group(
         title='ACTIONS', description=des['actions'])
     actions.add_argument('-a', '--add', metavar=('IP=value'), nargs='+',
@@ -79,6 +77,11 @@ def parser_creation():
                          type=convert_to_ip, default=[], help=des['remove'])
     actions.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                          default=False, help=des['dump'])
+
+    options = parser.add_argument_group(title='OPTIONS')
+    options.add_argument('-h', '--help', action='help', help=des['help'])
+    options.add_argument('--cpu', action='store_true',
+                         default=False, help=des['cpu'])
 
     return parser
 
@@ -120,13 +123,15 @@ def map_modification(map, action, ips, values=[]):
         subprocess.call(command)
 
 
-def map_dump(map, path):
+def map_dump(map, path, cpu_flag):
     """
         Dump the eBPF map given into a JSON file.
 
         :param map: path to the eBPF map
         :param path: path to the file in which the dump will be stored,
                      None if the dump is disply on stdout
+        :param cpu_flag: a boolean, if True, the dump display the value of each
+                         cpu, else, the sum of all these values is printed
 
         :return: None
     """
@@ -138,9 +143,16 @@ def map_dump(map, path):
         ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['key']])
         ip_int = int(ipaddress.ip_address(bytes.fromhex(ip_hex)))
         ip = str(ipaddress.ip_address(socket.ntohl(ip_int)))
-        val_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['value']])
-        val = int(val_hex, 16)
-        output.append((ip, val))
+        vals = []
+        for v in i['values']:
+            val_hex = ''.join(['{0[2]}{0[3]}'.format(el, el)
+                               for el in v['value']])
+            val = int(val_hex, 16)
+            vals.append((v['cpu'], val))
+        vals = dict(vals)
+        if cpu_flag == False:
+            vals = sum(vals.values())
+        output.append((ip, vals))
     output = dict(output)
     if path == None:
         print(json.dumps(output, indent=4))
@@ -157,7 +169,7 @@ def main():
     map_modification(eBPF_map, "update", add_ips, add_value)
     map_modification(eBPF_map, "delete", args.remove)
     if args.dump != False:
-        map_dump(eBPF_map, args.dump)
+        map_dump(eBPF_map, args.dump, args.cpu)
 
 
 if __name__ == '__main__':
