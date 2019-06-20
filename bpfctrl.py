@@ -266,7 +266,15 @@ def map_get(map, key, cpu_flag):
         print("There is no key {} in the map {}.".format(ip, map))
     else:
         output = parse_json_output(json.loads(res), cpu_flag)
-        print("The value of key {} is {}.".format(ip, output[ip]))
+        if cpu_flag:
+            value = ""
+            print(list(output[ip].keys()))
+            for i in list(output[ip].keys()):
+                value += "\n - {} for cpu {},".format(output[ip][i], i)
+            value = value[0:len(value) - 1]
+        else:
+            value = output[ip]
+        print("The value of key {} is {}.".format(ip, value))
 
 
 def main():
