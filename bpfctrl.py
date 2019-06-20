@@ -123,37 +123,83 @@ def map_modification(map, action, ips, values=[]):
         subprocess.call(command)
 
 
+def hex_array_to_ip(hex_array):
+    """
+        Transform an array of hexadecimal values "0xaa" into an IP address.
+
+        :param array: an array of hexademial numbers "Oxaa"
+
+        :return: an IP address as a string
+    """
+    ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in hex_array])
+    ip_int = int(ipaddress.ip_address(bytes.fromhex(ip_hex)))
+    ip = ipaddress.ip_address(socket.ntohl(ip_int))
+    return(str(ip))
+
+
+def hex_array_to_int(hex_array):
+    """
+        Transform an array of hexadecimal values "0xaa" into an int.
+
+        :param array: an array of hexademial numbers "Oxaa"
+
+        :return: an int
+    """
+    int_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in hex_array])
+    return int(int_hex, 16)
+
+
+def dump_cpu_parse(dump_result, dict_bool):
+    """
+        Parse a list of dictionnaries [{'cpu', 'value'} into a dictionnary or
+        the sum of all the 'value'.
+
+        :param dump_result: a list of dictionnaries {'cpu', 'value'} where
+                            'cpu' value is an int and 'value' value is an array
+                            of hexadecimal number ["0xaa", ...]
+        :param dict_bool: if True the result is a dictionnary, else an int.
+
+        :return: a dictionnary {cpu:value, ...} or the sum of all the values.
+    """
+    vals = []
+    for v in dump_result:
+        vals.append((v['cpu'], hex_array_to_int(v['value'])))
+    vals = dict(vals)
+    if dict_bool:
+        return vals
+    else:
+        return sum(vals.values())
+
+
 def map_dump(map, path, cpu_flag):
     """
-        Dump the eBPF map given into a JSON file.
+        Print the dump of the eBPF map given or store it into a JSON file.
 
         :param map: path to the eBPF map
         :param path: path to the file in which the dump will be stored,
-                     None if the dump is disply on stdout
-        :param cpu_flag: a boolean, if True, the dump display the value of each
-                         cpu, else, the sum of all these values is printed
+                     None if the dump is displayed on stdout.
+        :param cpu_flag: A boolean that indicated if the value per cpu are
+                         displayed (True) or if it is their sum. Do nothing if
+                         the eBPF map have not the value per each cpu.
 
         :return: None
     """
     call = subprocess.run(["bpftool", "map", "dump", "pinned",
                            map, "-j"], encoding='utf-8', stdout=subprocess.PIPE)
-    res = json.loads(call.stdout)
+    dump = json.loads(call.stdout)
     output = []
-    for i in res:
-        ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in i['key']])
-        ip_int = int(ipaddress.ip_address(bytes.fromhex(ip_hex)))
-        ip = str(ipaddress.ip_address(socket.ntohl(ip_int)))
-        vals = []
-        for v in i['values']:
-            val_hex = ''.join(['{0[2]}{0[3]}'.format(el, el)
-                               for el in v['value']])
-            val = int(val_hex, 16)
-            vals.append((v['cpu'], val))
-        vals = dict(vals)
-        if cpu_flag == False:
-            vals = sum(vals.values())
-        output.append((ip, vals))
+    for i in dump:
+        ip = hex_array_to_ip(i['key'])
+        try:
+            dump_value = i['values']
+        except KeyError:
+            dump_value = i['value']
+            value = hex_array_to_int(dump_value)
+        else:
+            value = dump_cpu_parse(dump_value, cpu_flag)
+        output.append((ip, value))
     output = dict(output)
+
     if path == None:
         print(json.dumps(output, indent=4))
     else:
