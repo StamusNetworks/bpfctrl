@@ -3,6 +3,7 @@ import ipaddress
 import json
 import socket
 import subprocess
+import sys
 
 
 def convert_to_ip(ip):
@@ -246,7 +247,7 @@ def map_dump(map, path, cpu_flag):
 def map_get(map, key, cpu_flag):
     """
         Chek if an IP address is in the eBPF map given, if it is, display its
-        value, else display "There is no key KEY in the map MAP."
+        value, else exit with an error.
 
         : param map: path to the eBPF map
         : param key: the ip to check(ipaddress)
@@ -260,21 +261,19 @@ def map_get(map, key, cpu_flag):
     command.append("-p")
     call = subprocess.run(command, encoding='utf-8', stdout=subprocess.PIPE)
     res = call.stdout
-    ip = str(ip_ntohl(key))
-
     if res == "null\n":
-        print("There is no key {} in the map {}.".format(ip, map))
+        sys.exit("This key is not in the map.")
+
+    ip = str(ip_ntohl(key))
+    output = parse_json_output(json.loads(res), cpu_flag)
+    if cpu_flag:
+        value = ""
+        for i in list(output[ip].keys()):
+            value += "\n - {} for cpu {},".format(output[ip][i], i)
+        value = value[0:len(value) - 1]
     else:
-        output = parse_json_output(json.loads(res), cpu_flag)
-        if cpu_flag:
-            value = ""
-            print(list(output[ip].keys()))
-            for i in list(output[ip].keys()):
-                value += "\n - {} for cpu {},".format(output[ip][i], i)
-            value = value[0:len(value) - 1]
-        else:
-            value = output[ip]
-        print("The value of key {} is {}.".format(ip, value))
+        value = output[ip]
+    print("The value of key {} is {}.".format(ip, value))
 
 
 def main():
