@@ -3,7 +3,7 @@
 A bpftool wrapper to handle eBPF maps.
 
 ## Setup instruction
-You need to install ```bpftool``.
+You need to install ```bpftool```.
 
 ```
 $ git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/
@@ -13,6 +13,8 @@ $ sudo make doc-install
 ```
 
 ## Examples of bpfctrl use
+
+### Map Modification
 The following command line adds the IPV4 address 1.2.3.4 with the value 1 in the pinned map `/sys/fs/bpf/suricata-wlp4s0-ipv4_drop`.
 ```
 $ sudo python3 bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --add 1.2.3.4=1
@@ -23,6 +25,7 @@ $ sudo python3 bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --remove 1.2.
 ```
 It is possible to add or to remove several addresses at the same time.
 
+### Map Access
 
 The dump of the map is done with the following command line.
 ```
@@ -35,8 +38,25 @@ The result of the dump can be store in a file if its paths is precised. If the f
 ```
 $ sudo python3 bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --dump ~/map.txt
 ```
+The value associated at one IP is available with ```--get IP``` action.
+```
+$ sudo python3 bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --get 3.3.3.3
+The value of key 1.2.3.4 is 4.
+```
+Some eBPF maps store for each IP address, a value per CPU. With the flag ```--cpu```, ```dump``` and ```get``` commands conserve it on the final output. Without it, the value display is the sum of the value of each CPU.
+```
+$ sudo python3 ~/bpfctrl-2/bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --get 3.3.3.3 --cpu
+The value of key 3.3.3.3 is
+ - 2 for cpu 0,
+ - 2 for cpu 1,
+ - 2 for cpu 2,
+ - 2 for cpu 3.
 
-The commands can be combined. First, addings are done, then removing and the dump is done at the end.
+$ sudo python3 ~/bpfctrl-2/bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --get 3.3.3.3
+The value of key 3.3.3.3 is 8.
+```
+### Combined Commands
+The commands can be combined. First, the program adds the elements and then removes. The dump of the map and the get are done at the end.
 ```
 $ sudo python3 bpfctrl.py -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop --add 1.2.3.4=1 5.6.7.8=9 --remove 1.2.3.4 --dump
 {
