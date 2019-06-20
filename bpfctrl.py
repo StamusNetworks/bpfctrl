@@ -58,10 +58,16 @@ def parser_creation():
            'add': 'add all the ip adresses given in the eBPF map at the \
                    associated values',
            'remove': 'remove all the ip adresses given in the eBPF map',
-           'dump': 'dump the eBPF map on stdout or in a file if <path> is precised',
-           'cpu': 'If dump option is activated, display the value for each cpu.',
+           'dump': 'dump the eBPF map on stdout or in a file if <path> is \
+                    precised',
+           'get': 'Check if the IP is present on the map. If it is, displays\
+                   its value.',
+           'cpu': 'If dump or get options are activated, display the value for\
+                   each cpu. If the eBPF map have not these precision, do\
+                   nothing.',
            # action group help
-           'actions': 'At least one action is needed. Adding are done before removing.'}
+           'actions': 'At least one action is needed. Adding are done before\
+                       removing. Dump and get are executed after.'}
 
     parser = argparse.ArgumentParser(
         usage='%(prog)s [OPTIONS] -m <path> ACTIONS', add_help=False)
@@ -77,6 +83,8 @@ def parser_creation():
                          type=convert_to_ip, default=[], help=des['remove'])
     actions.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                          default=False, help=des['dump'])
+    actions.add_argument('--get', nargs=1, metavar=('IP'),
+                         type=convert_to_ip, default=False, help=des['get'])
 
     options = parser.add_argument_group(title='OPTIONS')
     options.add_argument('-h', '--help', action='help', help=des['help'])
@@ -95,10 +103,18 @@ def arg_parse():
     parser = parser_creation()
     args = parser.parse_args()
 
-    if args.add == [] and args.remove == [] and args.dump == False:
+    if args.add == [] and args.remove == [] and args.dump == False and args.get == False:
         exit(parser.format_help())
     else:
         return args
+
+
+def command_action(map, action, ip):
+    """ Create a list of the commands to do action on the map with the key ip"""
+    ip = str(ip).split(".")
+    command = ["bpftool", "map", action, "pinned", map, "key"]
+    command.extend(ip)
+    return command
 
 
 def map_modification(map, action, ips, values=[]):
@@ -113,14 +129,19 @@ def map_modification(map, action, ips, values=[]):
         :return: None
     """
     for i in range(len(ips)):
-        ip = str(ips[i]).split(".")
-        command = ["bpftool", "map", action, "pinned", map, "key"]
-        command.extend(ip)
+        command = (map, action, i)
         if action == "update":
             val = str(values[i]).split(".")
             command.append("value")
             command.extend(val)
         subprocess.call(command)
+
+
+def ip_ntohl(ip):
+    """Return the ip address after application of the ntohl on it"""
+    ip_int = int(ipaddress.ip_address(ip))
+    ip_int = socket.ntohl(ip_int)
+    return ipaddress.ip_address(ip_int)
 
 
 def hex_array_to_ip(hex_array):
@@ -129,12 +150,10 @@ def hex_array_to_ip(hex_array):
 
         :param array: an array of hexademial numbers "Oxaa"
 
-        :return: an IP address as a string
+        :return: an IP
     """
     ip_hex = ''.join(['{0[2]}{0[3]}'.format(el, el) for el in hex_array])
-    ip_int = int(ipaddress.ip_address(bytes.fromhex(ip_hex)))
-    ip = ipaddress.ip_address(socket.ntohl(ip_int))
-    return(str(ip))
+    return ip_ntohl(bytes.fromhex(ip_hex))
 
 
 def hex_array_to_int(hex_array):
@@ -149,12 +168,12 @@ def hex_array_to_int(hex_array):
     return int(int_hex, 16)
 
 
-def dump_cpu_parse(dump_result, dict_bool):
+def cpu_parse(json_result, dict_bool):
     """
         Parse a list of dictionnaries [{'cpu', 'value'} into a dictionnary or
         the sum of all the 'value'.
 
-        :param dump_result: a list of dictionnaries {'cpu', 'value'} where
+        :param json_result: a list of dictionnaries {'cpu', 'value'} where
                             'cpu' value is an int and 'value' value is an array
                             of hexadecimal number ["0xaa", ...]
         :param dict_bool: if True the result is a dictionnary, else an int.
@@ -162,13 +181,41 @@ def dump_cpu_parse(dump_result, dict_bool):
         :return: a dictionnary {cpu:value, ...} or the sum of all the values.
     """
     vals = []
-    for v in dump_result:
+    for v in json_result:
         vals.append((v['cpu'], hex_array_to_int(v['value'])))
     vals = dict(vals)
     if dict_bool:
         return vals
     else:
         return sum(vals.values())
+
+
+def parse_json_output(json_output, cpu_flag):
+    """
+        Parse a json output of a bpftool command, transform it in a dictionnary
+        {ip:{cpu:int}} or {ip:int}. The value is computed by transforming the
+        hexademimal values of the json output into an int.
+
+        :param json_output: a dictionnary (obtained with a json.load command)
+        :param cpu_flag: a boolean that indicates the type of dictionnary to
+                         return
+
+        :return: a dictionnary
+    """
+    output = []
+    if type(json_output) != 'list':
+        json_output = [json_output]
+    for i in json_output:
+        ip = str(hex_array_to_ip(i['key']))
+        try:
+            dump_value = i['values']
+        except KeyError:
+            dump_value = i['value']
+            value = hex_array_to_int(dump_value)
+        else:
+            value = cpu_parse(dump_value, cpu_flag)
+        output.append((ip, value))
+    return dict(output)
 
 
 def map_dump(map, path, cpu_flag):
@@ -187,24 +234,39 @@ def map_dump(map, path, cpu_flag):
     call = subprocess.run(["bpftool", "map", "dump", "pinned",
                            map, "-j"], encoding='utf-8', stdout=subprocess.PIPE)
     dump = json.loads(call.stdout)
-    output = []
-    for i in dump:
-        ip = hex_array_to_ip(i['key'])
-        try:
-            dump_value = i['values']
-        except KeyError:
-            dump_value = i['value']
-            value = hex_array_to_int(dump_value)
-        else:
-            value = dump_cpu_parse(dump_value, cpu_flag)
-        output.append((ip, value))
-    output = dict(output)
+    output = parse_json_output(dump, cpu_flag)
 
     if path == None:
         print(json.dumps(output, indent=4))
     else:
         with open(path, 'w') as file:
             json.dump(output, file, indent=4)
+
+
+def map_get(map, key, cpu_flag):
+    """
+        Chek if an IP address is in the eBPF map given, if it is, display its
+        value, else display "There is no key KEY in the map MAP."
+
+        : param map: path to the eBPF map
+        : param key: the ip to check(ipaddress)
+        : param cpu_flag: A boolean that indicated if the value per cpu are
+                         displayed(True) or if it is their sum. Do nothing if
+                         the eBPF map have not a value per each cpu.
+
+        : return: None
+    """
+    command = command_action(map, "lookup", key)
+    command.append("-p")
+    call = subprocess.run(command, encoding='utf-8', stdout=subprocess.PIPE)
+    res = call.stdout
+    ip = str(ip_ntohl(key))
+
+    if res == "null\n":
+        print("There is no key {} in the map {}.".format(ip, map))
+    else:
+        output = parse_json_output(json.loads(res), cpu_flag)
+        print("The value of key {} is {}.".format(ip, output[ip]))
 
 
 def main():
@@ -216,6 +278,8 @@ def main():
     map_modification(eBPF_map, "delete", args.remove)
     if args.dump != False:
         map_dump(eBPF_map, args.dump, args.cpu)
+    if args.get != False:
+        map_get(eBPF_map, args.get[0], args.cpu)
 
 
 if __name__ == '__main__':
