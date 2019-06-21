@@ -26,16 +26,19 @@ def convert_to_ip(ip):
 
 def convert_to_value(val):
     """
-        TODO
+        Transform a value (an string of uint 32) into an array of 4 str(int)
+        corresponding of the value of each byte.
     """
-    return ipaddress.ip_address(int(val))
+    value = ipaddress.ip_address(int(val))
+    value = str(value).split(".")
+    return value
 
 
 def convert_to_ip_value(ipval):
     """
         Convert a string into an IP address and the value associated.
 
-        TODO
+        :param ipval: a string like 'ip=value'
 
         :return: an array like [ip, value]
     """
@@ -113,15 +116,15 @@ def arg_parse():
         return args
 
 
-def command_action(map, action, ip):
-    """ Create a list of the commands to do action on the map with the key ip"""
-    ip = str(ip).split(".")
+def command_action(map, action, key):
+    """Create a list of the commands to do action on the map with the key"""
+    key = str(key).split(".")
     command = ["bpftool", "map", action, "pinned", map, "key"]
-    command.extend(ip)
+    command.extend(key)
     return command
 
 
-def map_modification(map, action, ips, values=0):
+def map_modification(map, action, ips, values=[]):
     """
         Add or remove IP adresses of the eBPF map given.
 
@@ -135,9 +138,8 @@ def map_modification(map, action, ips, values=0):
     for i in range(len(ips)):
         command = command_action(map, action, ips[i])
         if action == "update":
-            val = str(values[i]).split(".")
             command.append("value")
-            command.extend(val)
+            command.extend(values[i])
         subprocess.call(command)
 
 
@@ -185,8 +187,8 @@ def cpu_parse(json_result, dict_bool):
         :return: a dictionnary {cpu:value, ...} or the sum of all the values.
     """
     vals = []
-    for v in json_result:
-        vals.append((v['cpu'], hex_array_to_int(v['value'])))
+    for j in json_result:
+        vals.append((j['cpu'], hex_array_to_int(j['value'])))
     vals = dict(vals)
     if dict_bool:
         return vals
@@ -209,17 +211,39 @@ def parse_json_output(json_output, cpu_flag):
     output = []
     if not isinstance(json_output, list):
         json_output = [json_output]
-    for i in json_output:
-        ip = str(hex_array_to_ip(i['key']))
+    for j in json_output:
+        key = str(hex_array_to_ip(j['key']))
         try:
-            dump_value = i['values']
+            dump_value = j['values']
         except KeyError:
-            dump_value = i['value']
+            dump_value = j['value']
             value = hex_array_to_int(dump_value)
         else:
             value = cpu_parse(dump_value, cpu_flag)
-        output.append((ip, value))
+        output.append((key, value))
     return dict(output)
+
+
+def output_string(dict, json_flag):
+    """
+        Given a dict {key:value} or {key:{cpu : val}}, create the output of the
+        programm and return it as a string. It can be in JSON format if
+        json_flag is True.
+    """
+    if json_flag:
+        return json.dumps(dict, indent=4)
+
+    keys = list(dict.keys())
+    res = ""
+    if isinstance(dict[keys[0]], int):
+        for k in keys:
+            res += "{}    {}\n".format(k, dict[k])
+    else:
+        for k in keys:
+            values = list(dict[k].values())
+            res += k + "    "
+            res += "    ".join(['{}'.format(val) for val in values]) + "\n"
+    return res[0:len(res) - 1]
 
 
 def map_dump(map, path, cpu_flag, json_flag):
@@ -275,28 +299,6 @@ def map_get(map, key, cpu_flag, json_flag):
 
     output = parse_json_output(json.loads(res), cpu_flag)
     print(output_string(output, json_flag))
-
-
-def output_string(dict, json_flag):
-    """
-        Given a dict {key:value} or {key:{cpu : val}}, create the output of the
-        programm and return it as a string. It can be in JSON format if
-        json_flag is True.
-    """
-    if json_flag:
-        return json.dumps(dict, indent=4)
-
-    keys = list(dict.keys())
-    res = ""
-    if isinstance(dict[keys[0]], int):
-        for k in keys:
-            res += "{}    {}\n".format(k, dict[k])
-    else:
-        for k in keys:
-            values = list(dict[k].values())
-            res += k + "    "
-            res += "    ".join(['{}'.format(val) for val in values]) + "\n"
-    return res[0:len(res) - 1]
 
 
 def main():
