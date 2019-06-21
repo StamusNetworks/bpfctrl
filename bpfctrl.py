@@ -66,6 +66,7 @@ def parser_creation():
            'cpu': 'If dump or get options are activated, display the value for\
                    each cpu. If the eBPF map have not these precision, do\
                    nothing.',
+           'json': 'The output will be in JSON format.',
            # action group help
            'actions': 'At least one action is needed. Adding are done before\
                        removing. Dump and get are executed after.'}
@@ -91,6 +92,8 @@ def parser_creation():
     options.add_argument('-h', '--help', action='help', help=des['help'])
     options.add_argument('--cpu', action='store_true',
                          default=False, help=des['cpu'])
+    options.add_argument('--json', action='store_true',
+                         default=False, help=des['json'])
 
     return parser
 
@@ -118,7 +121,7 @@ def command_action(map, action, ip):
     return command
 
 
-def map_modification(map, action, ips, values=[]):
+def map_modification(map, action, ips, values=0):
     """
         Add or remove IP adresses of the eBPF map given.
 
@@ -130,7 +133,7 @@ def map_modification(map, action, ips, values=[]):
         :return: None
     """
     for i in range(len(ips)):
-        command = (map, action, i)
+        command = command_action(map, action, ips[i])
         if action == "update":
             val = str(values[i]).split(".")
             command.append("value")
@@ -204,7 +207,7 @@ def parse_json_output(json_output, cpu_flag):
         :return: a dictionnary
     """
     output = []
-    if type(json_output) != 'list':
+    if not isinstance(json_output, list):
         json_output = [json_output]
     for i in json_output:
         ip = str(hex_array_to_ip(i['key']))
@@ -219,32 +222,35 @@ def parse_json_output(json_output, cpu_flag):
     return dict(output)
 
 
-def map_dump(map, path, cpu_flag):
+def map_dump(map, path, cpu_flag, json_flag):
     """
         Print the dump of the eBPF map given or store it into a JSON file.
 
         :param map: path to the eBPF map
         :param path: path to the file in which the dump will be stored,
                      None if the dump is displayed on stdout.
-        :param cpu_flag: A boolean that indicated if the value per cpu are
+        :param cpu_flag: A boolean that indicates if the value per cpu are
                          displayed (True) or if it is their sum. Do nothing if
                          the eBPF map have not the value per each cpu.
+        :param json_flag: A boolean that indicates if the output is in JSON
+                          format.
 
         :return: None
     """
     call = subprocess.run(["bpftool", "map", "dump", "pinned",
                            map, "-j"], encoding='utf-8', stdout=subprocess.PIPE)
     dump = json.loads(call.stdout)
-    output = parse_json_output(dump, cpu_flag)
-
+    dict = parse_json_output(dump, cpu_flag)
+    output = output_string(dict, json_flag)
     if path == None:
-        print(json.dumps(output, indent=4))
+        print(output)
     else:
         with open(path, 'w') as file:
-            json.dump(output, file, indent=4)
+            file.write(output)
+            file.close()
 
 
-def map_get(map, key, cpu_flag):
+def map_get(map, key, cpu_flag, json_flag):
     """
         Chek if an IP address is in the eBPF map given, if it is, display its
         value, else exit with an error.
@@ -254,6 +260,8 @@ def map_get(map, key, cpu_flag):
         : param cpu_flag: A boolean that indicated if the value per cpu are
                          displayed(True) or if it is their sum. Do nothing if
                          the eBPF map have not a value per each cpu.
+        :param json_flag: A boolean that indicates if the output is in JSON
+                          format.
 
         : return: None
     """
@@ -261,19 +269,34 @@ def map_get(map, key, cpu_flag):
     command.append("-p")
     call = subprocess.run(command, encoding='utf-8', stdout=subprocess.PIPE)
     res = call.stdout
-    if res == "null\n":
-        sys.exit("This key is not in the map.")
-
     ip = str(ip_ntohl(key))
+    if res == "null\n":
+        sys.exit("The key {} is not in the map {}.".format(ip, map))
+
     output = parse_json_output(json.loads(res), cpu_flag)
-    if cpu_flag:
-        value = ""
-        for i in list(output[ip].keys()):
-            value += "\n - {} for cpu {},".format(output[ip][i], i)
-        value = value[0:len(value) - 1]
+    print(output_string(output, json_flag))
+
+
+def output_string(dict, json_flag):
+    """
+        Given a dict {key:value} or {key:{cpu : val}}, create the output of the
+        programm and return it as a string. It can be in JSON format if
+        json_flag is True.
+    """
+    if json_flag:
+        return json.dumps(dict, indent=4)
+
+    keys = list(dict.keys())
+    res = ""
+    if isinstance(dict[keys[0]], int):
+        for k in keys:
+            res += "{}    {}\n".format(k, dict[k])
     else:
-        value = output[ip]
-    print("The value of key {} is {}.".format(ip, value))
+        for k in keys:
+            values = list(dict[k].values())
+            res += k + "    "
+            res += "    ".join(['{}'.format(val) for val in values]) + "\n"
+    return res[0:len(res) - 1]
 
 
 def main():
@@ -284,9 +307,9 @@ def main():
     map_modification(eBPF_map, "update", add_ips, add_value)
     map_modification(eBPF_map, "delete", args.remove)
     if args.dump != False:
-        map_dump(eBPF_map, args.dump, args.cpu)
+        map_dump(eBPF_map, args.dump, args.cpu, args.json)
     if args.get != False:
-        map_get(eBPF_map, args.get[0], args.cpu)
+        map_get(eBPF_map, args.get[0], args.cpu, args.json)
 
 
 if __name__ == '__main__':
