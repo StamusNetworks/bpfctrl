@@ -116,6 +116,19 @@ def arg_parse():
         return args
 
 
+def exit_bpf_error(stdout):
+    """
+        Exit with the error returned by bpf.
+
+        :param stdout: output of the bpftool command like :
+                       '{"error":"bpf obj get (/sys/fs/bpf): Permission
+                        denied"}\n'
+    """
+    stdout = stdout.replace('"', "").replace("\n", "")
+    stdout_split = stdout[1:len(stdout) - 1].split(":")
+    sys.exit(stdout_split[2].lstrip())
+
+
 def command_action(map, action, key):
     """Create a list of the commands to do action on the map with the key"""
     key = str(key).split(".")
@@ -140,7 +153,10 @@ def map_modification(map, action, ips, values=[]):
         if action == "update":
             command.append("value")
             command.extend(values[i])
-        subprocess.call(command)
+        call = subprocess.run(command, encoding='utf-8',
+                              stdout=subprocess.PIPE)
+        if call.returncode != 0:
+            exit_bpf_error(call.stdout)
 
 
 def ip_ntohl(ip):
@@ -263,6 +279,10 @@ def map_dump(map, path, cpu_flag, json_flag):
     """
     call = subprocess.run(["bpftool", "map", "dump", "pinned",
                            map, "-j"], encoding='utf-8', stdout=subprocess.PIPE)
+
+    if call.returncode != 0:
+        exit_bpf_error(call.stdout)
+
     dump = json.loads(call.stdout)
     dict = parse_json_output(dump, cpu_flag)
     output = output_string(dict, json_flag)
@@ -292,6 +312,9 @@ def map_get(map, key, cpu_flag, json_flag):
     command = command_action(map, "lookup", key)
     command.append("-p")
     call = subprocess.run(command, encoding='utf-8', stdout=subprocess.PIPE)
+    if call.returncode != 0:
+        exit_bpf_error(call.stdout)
+
     res = call.stdout
     ip = str(ip_ntohl(key))
     if res == "null\n":
