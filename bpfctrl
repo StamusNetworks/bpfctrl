@@ -253,7 +253,9 @@ def output_string(dict, json_flag):
 
     keys = list(dict.keys())
     res = ""
-    if isinstance(dict[keys[0]], int):
+    if len(keys) == 0:
+        return res
+    elif isinstance(dict[keys[0]], int):
         for k in keys:
             res += "{}    {}\n".format(k, dict[k])
     else:
