@@ -146,17 +146,14 @@ def parser_creation():
            }
 
     parser = argparse.ArgumentParser(
-        add_help=False, usage='%(prog)s [OPTIONS] MAP TYPE ACTIONS',
+        usage='%(prog)s [--help] MAP TYPE ACTIONS',
         epilog="To see ACTIONS help: $ bpfctrl MAP TYPE {-h | --help}")
 
     map_path = parser.add_argument_group(title='MAP')
     map_path.add_argument('-m', '--map', required=True,
                           nargs=1, help=des['map'])
-    options = parser.add_argument_group(title='OPTIONS')
-    options.add_argument('-h', '--help', action='help', help=des['help'])
-    options
     subparsers = parser.add_subparsers(dest='map_type', title='TYPE',
-                                       prog='bpfctrl [--json] MAP',
+                                       prog='bpfctrl MAP',
                                        help='Type of the eBPF map.')
     ip_subparser_creation(subparsers)
     uniq_subparser_creation(subparsers)
