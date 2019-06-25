@@ -85,7 +85,8 @@ def ip_subparser_creation(subparsers):
         # options
         'cpu': 'If dump or get options are activated, display the value for\
             each cpu. If the eBPF map have not these precision, do\
-            nothing.'
+            nothing.',
+        'json': 'Output and file created will be in JSON format.'
     }
     parser_ip = subparsers.add_parser('ip', help=des['ip'])
     actions_ip = parser_ip.add_argument_group(
@@ -101,6 +102,8 @@ def ip_subparser_creation(subparsers):
                             type=convert_to_ip, default=False, help=des['get'])
     parser_ip.add_argument('--cpu', action='store_true',
                            default=False, help=des['cpu'])
+    parser_ip.add_argument('--json', action='store_true',
+                           default=False, help=des['json'])
 
 
 def uniq_subparser_creation(subparsers):
@@ -115,6 +118,8 @@ def uniq_subparser_creation(subparsers):
         'set': 'Set the map with the value given.',
         'dump': 'Dump the eBPF map on stdout or in a file if <path> is \
                  precised.',
+        # options
+        'json': 'Output and file created will be in JSON format.'
     }
     parser_uniq = subparsers.add_parser(
         'uniq', help=des['uniq'])
@@ -125,6 +130,8 @@ def uniq_subparser_creation(subparsers):
                               help=des['uniq'])
     actions_uniq.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                               default=False, help=des['dump'])
+    parser_uniq.add_argument('--json', action='store_true',
+                             default=False, help=des['json'])
 
 
 def parser_creation():
@@ -135,8 +142,7 @@ def parser_creation():
     """
     # messages display in the help
     des = {'help': 'Show this help message and exit.',
-           'map': 'Path to the eBPF map.',
-           'json': 'Output and file created will be in JSON format.'
+           'map': 'Path to the eBPF map.'
            }
 
     parser = argparse.ArgumentParser(
@@ -146,17 +152,14 @@ def parser_creation():
     map_path = parser.add_argument_group(title='MAP')
     map_path.add_argument('-m', '--map', required=True,
                           nargs=1, help=des['map'])
-
+    options = parser.add_argument_group(title='OPTIONS')
+    options.add_argument('-h', '--help', action='help', help=des['help'])
+    options
     subparsers = parser.add_subparsers(dest='map_type', title='TYPE',
                                        prog='bpfctrl [--json] MAP',
                                        help='Type of the eBPF map.')
     ip_subparser_creation(subparsers)
     uniq_subparser_creation(subparsers)
-
-    options = parser.add_argument_group(title='OPTIONS')
-    options.add_argument('-h', '--help', action='help', help=des['help'])
-    options.add_argument('--json', action='store_true',
-                         default=False, help=des['json'])
 
     return parser
 
