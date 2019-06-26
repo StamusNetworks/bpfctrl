@@ -197,8 +197,9 @@ def exit_bpf_error(stdout):
                         denied"}\n'
     """
     stdout = stdout.replace('"', "").replace("\n", "")
-    stdout_split = stdout[1:len(stdout) - 1].split(":")
-    sys.exit(stdout_split[2].lstrip())
+    stdout_split = stdout[1:].split(":")
+    exit_message = stdout_split[2].replace("}", "")
+    sys.exit(exit_message.lstrip())
 
 
 def command_action(map_path, action, key):
@@ -227,9 +228,9 @@ def map_modification(map_path, action, ips, values=None):
             command.append("value")
             command.extend(values[i])
         call = subprocess.run(command, encoding='utf-8',
-                              stdout=subprocess.PIPE)
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if call.returncode != 0:
-            exit_bpf_error(call.stdout)
+            exit_bpf_error(call.stderr)
 
 
 def ip_ntohl(ip):
