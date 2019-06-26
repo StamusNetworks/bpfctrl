@@ -5,6 +5,7 @@
 import argparse
 import ipaddress
 import json
+import shutil
 import socket
 import subprocess
 import sys
@@ -413,6 +414,10 @@ def map_get(ebpf_map, key, map_type, json_flag, cpu_flag):
 
 def main():
     args = arg_parse()
+
+    if shutil.which("bpftool") is None:
+        sys.exit("Bpftool not found.")
+
     ebpf_map = args.map[0]
     if args.map_type == 'ip':
         add_ips = list(map(lambda pos: pos[0], args.add))
