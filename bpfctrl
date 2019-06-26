@@ -147,7 +147,14 @@ def parser_creation():
 
     parser = argparse.ArgumentParser(
         usage='%(prog)s [--help] MAP TYPE ACTIONS',
-        epilog="To see ACTIONS help: $ bpfctrl MAP TYPE {-h | --help}")
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+ACTIONS:
+ip commands: --add, --get, --remove, --dump
+uniq commands: --set, --dump
+
+A detailed help for actions is available with:
+bpfctrl -m MAP TYPE --help""")
 
     map_path = parser.add_argument_group(title='MAP')
     map_path.add_argument('-m', '--map', required=True,
