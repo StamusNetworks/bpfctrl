@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+"""Install bpfctrl"""
+
+from setuptools import setup
+
+setup(
+    name="bpfctrl",
+    version="0.1",
+    description="A bpftool wrapper to handle eBPF maps.",
+    install_requires=['argparse', 'ipaddress'],
+    packages=['bpfctrl'],
+    scripts=['bpfctrl/bpfctrl'],
+)
