@@ -15,6 +15,7 @@ setup(
         'Environment :: Console',
         'Intended Audience :: System Administrators',
         'Operating System :: Unix',
-        'Programming Language :: Python :: 3.6'
+        'Programming Language :: Python :: 3.6',
+        'License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)'
     ],
 )
