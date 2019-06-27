@@ -11,4 +11,10 @@ setup(
     install_requires=['argparse', 'ipaddress'],
     packages=['bpfctrl'],
     scripts=['bpfctrl/bpfctrl'],
+    classifiers=[
+        'Environment :: Console',
+        'Intended Audience :: System Administrators',
+        'Operating System :: Unix',
+        'Programming Language :: Python :: 3.6'
+    ],
 )
