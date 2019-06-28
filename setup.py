@@ -10,7 +10,9 @@ setup(
     description="A bpftool wrapper to handle eBPF maps.",
     install_requires=['argparse', 'ipaddress'],
     packages=['bpfctrl'],
-    scripts=['bpfctrl/bpfctrl'],
+    package_dir={'bpfctrl':'src'},
+    scripts=['bpfctrl'],
+    provides=['bpfctrl'],
     classifiers=[
         'Environment :: Console',
         'Intended Audience :: System Administrators',

@@ -20,7 +20,7 @@ import argparse
 import shutil
 import sys
 
-from module import Ipv4, U32, MapIpv4, MapUniq
+from bpfctrl import Ipv4, U32, MapIpv4, MapUniq
 
 
 def ip_object(ip_str):
