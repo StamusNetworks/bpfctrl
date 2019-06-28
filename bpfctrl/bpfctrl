@@ -17,67 +17,39 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 import argparse
-import ipaddress
-import json
 import shutil
-import socket
-import subprocess
 import sys
 
-
-def convert_to_ip(ip_str):
-    """
-        Convert a string into an IP address.
-
-        :param ip_str: the ip to convert, can be like X.X.X.X or X:X:X:X:X:X, or
-                       an int (decimal notation) converted into a string
-
-        :return: an ip address
-    """
-    try:
-        ip_addr = ipaddress.ip_address(int(ip_str))
-    except ValueError:
-        ip_addr = ipaddress.ip_address(ip_str)
-    ip_int = int(ipaddress.ip_address(ip_addr))
-    return ipaddress.ip_address(socket.htonl(ip_int))
+from module import Ipv4, U32, MapIpv4, MapUniq
 
 
-def convert_to_value(val):
+def ip_object(ip_str):
+    """Convert a string an Ipv4 object and return it"""
+    return Ipv4(ip_str)
+
+
+def u32_object(val):
     """
         Transform a value (an string of uint 32) into an array of 4 str(int)
         corresponding of the value of each byte.
     """
-    value = ipaddress.ip_address(int(val))
-    value = str(value).split(".")
-    return value
+    return U32(val)
 
 
-def convert_to_ip_value(ipval):
+def array_ip_u32_objects(ipval):
     """
         Convert a string into an IP address and the value associated.
 
         :param ipval: a string like 'ip=value'
 
-        :return: an array like [ip, value]
+        :return: an array like [ip, value] with ip an Ipv4 object and value a
+                 U32 object
     """
     res = ipval.split('=')
     if len(res) == 1:
         res.append('')
-    res[0] = convert_to_ip(res[0])
-    res[1] = convert_to_value(res[1])
-    return res
-
-
-def convert_to_0_value(val):
-    """
-        Given a value (u32), return an array like [0, value]
-
-        :param value: a u32 converted into a string
-
-        :return: ['0.0.0.0', value]
-    """
-    res = convert_to_ip_value("0=" + val)
-    res[0] = str(res[0])
+    res[0] = ip_object(res[0])
+    res[1] = u32_object(res[1])
     return res
 
 
@@ -85,7 +57,7 @@ def ip_subparser_creation(subparsers):
     """Add a parser dedicated at the eBPF map of ips in the subparsers."""
     des = {
         # parser
-        'ip': 'Keys of the eBPF map are IPv4 addresses.',
+        'ipv4': 'Keys of the eBPF map are IPv4 addresses.',
         # action group help
         'actions-ip': 'At least one action is needed. Adding are done before\
                       removing. Dump and get are executed after.',
@@ -103,18 +75,18 @@ def ip_subparser_creation(subparsers):
             nothing.',
         'json': 'Output and file created will be in JSON format.'
     }
-    parser_ip = subparsers.add_parser('ip', help=des['ip'])
+    parser_ip = subparsers.add_parser('ipv4', help=des['ipv4'])
     actions_ip = parser_ip.add_argument_group(
         title='ACTIONS', description=des['actions-ip'])
     actions_ip.add_argument('-a', '--add', metavar=('IP=value'), nargs='+',
-                            type=convert_to_ip_value, default=[], help=des['add'])
+                            type=array_ip_u32_objects, default=[], help=des['add'])
     actions_ip.add_argument('-r', '--remove', metavar=('IP'), nargs='+',
-                            type=convert_to_ip, default=[],
+                            type=ip_object, default=[],
                             help=des['remove'])
     actions_ip.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                             default=False, help=des['dump'])
     actions_ip.add_argument('-g', '--get', nargs=1, metavar=('IP'),
-                            type=convert_to_ip, default=False, help=des['get'])
+                            type=ip_object, default=False, help=des['get'])
     parser_ip.add_argument('--cpu', action='store_true',
                            default=False, help=des['cpu'])
     parser_ip.add_argument('--json', action='store_true',
@@ -141,7 +113,7 @@ def uniq_subparser_creation(subparsers):
     actions_uniq = parser_uniq.add_argument_group(
         title='ACTIONS', description=des['actions-uniq'])
     actions_uniq.add_argument('-s', '--set', metavar=('value'),
-                              nargs=1, default=[], type=convert_to_0_value,
+                              nargs=1, default=[], type=u32_object,
                               help=des['uniq'])
     actions_uniq.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                               default=False, help=des['dump'])
@@ -194,7 +166,7 @@ def arg_parse():
 
     if args.map_type is None:
         exit(parser.format_help())
-    if (args.map_type == 'ip' and args.add == [] and args.remove == []
+    if (args.map_type == 'ipv4' and args.add == [] and args.remove == []
             and args.dump == False and args.get == False):
         exit(parser.format_help())
     elif (args.map_type == 'uniq' and args.dump == False
@@ -203,251 +175,27 @@ def arg_parse():
     return args
 
 
-def exit_bpf_error(stdout):
-    """
-        Exit with the error returned by bpf.
-
-        :param stdout: output of the bpftool command like :
-                       '{"error":"bpf obj get (/sys/fs/bpf): Permission
-                        denied"}\n'
-    """
-    stdout = stdout.replace('"', "").replace("\n", "")
-    stdout_split = stdout[1:].split(":")
-    exit_message = stdout_split[2].replace("}", "")
-    sys.exit(exit_message.lstrip())
-
-
-def command_action(map_path, action, key):
-    """Create a list of commands to do action on the eBPF map with the key"""
-    key = str(key).split(".")
-    command = ["bpftool", "map", action, "pinned", map_path, "key"]
-    command.extend(key)
-    return command
-
-
-def map_modification(map_path, action, ips, values=None):
-    """
-        Add or remove IP adresses of the eBPF map given.
-
-        :param map_path: path to the eBPF map
-        :param action: "update" or "delete"
-        :param ips: a list of ip
-        :param values: a list of the values associated with the ip of ips
-
-        :return: None
-    """
-    len_ip = len(ips)
-    for i in range(len_ip):
-        command = command_action(map_path, action, ips[i])
-        if action == "update":
-            command.append("value")
-            command.extend(values[i])
-        call = subprocess.run(command, encoding='utf-8',
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if call.returncode != 0:
-            exit_bpf_error(call.stderr)
-
-
-def ip_ntohl(ip):
-    """Return the ip address after application of the ntohl on it"""
-    ip_int = int(ipaddress.ip_address(ip))
-    ip_int = socket.ntohl(ip_int)
-    return ipaddress.ip_address(ip_int)
-
-
-def hex_array_to_ip(hex_array):
-    """
-        Transform an array of hexadecimal values "0xaa" into an IP address.
-
-        :param array: an array of hexademial numbers "Oxaa"
-
-        :return: an IP
-    """
-    ip_hex = ''.join(['{0[2]}{0[3]}'.format(el) for el in hex_array])
-    return ip_ntohl(bytes.fromhex(ip_hex))
-
-
-def hex_array_to_int(hex_array):
-    """
-        Transform an array of hexadecimal values "0xaa" into an int.
-
-        :param array: an array of hexademial numbers "Oxaa"
-
-        :return: an int
-    """
-    int_hex = ''.join(['{0[2]}{0[3]}'.format(el) for el in hex_array])
-    return int(int_hex, 16)
-
-
-def cpu_parse(json_result, dict_bool):
-    """
-        Parse a list of dictionnaries [{'cpu', 'value'} into a dictionnary or
-        the sum of all the 'value'.
-
-        :param json_result: a list of dictionnaries {'cpu', 'value'} where
-                            'cpu' value is an int and 'value' value is an array
-                            of hexadecimal number ["0xaa", ...]
-        :param dict_bool: if True the result is a dictionnary, else an int.
-
-        :return: a dictionnary {cpu:value, ...} or the sum of all the values.
-    """
-    vals = []
-    for j in json_result:
-        vals.append((j['cpu'], hex_array_to_int(j['value'])))
-    vals = dict(vals)
-    if dict_bool:
-        return vals
-    return sum(vals.values())
-
-
-def parse_json_output(json_output, map_type, cpu_flag):
-    """
-        Parse a json output of a bpftool command, transform it in a dictionnary
-        {ip:{cpu:int}} or {ip:int}. The value is computed by transforming the
-        hexademimal values of the json output into an int.
-
-        :param json_output: a dictionnary (obtained with a json.load command)
-        :param map_type: 'ip' or 'uniq', type of data stored in the map
-        :param cpu_flag: a boolean that indicates the type of dictionnary to
-                         return
-
-        :return: a dictionnary
-    """
-    key_transformation = {
-        'ip': (lambda key: str(hex_array_to_ip(key))),
-        'uniq': hex_array_to_int}
-
-    output = []
-    if not isinstance(json_output, list):
-        json_output = [json_output]
-    for j in json_output:
-        key = key_transformation[map_type](j['key'])
-        try:
-            dump_value = j['values']
-        except KeyError:
-            dump_value = j['value']
-            value = hex_array_to_int(dump_value)
-        else:
-            value = cpu_parse(dump_value, cpu_flag)
-        output.append((key, value))
-    return dict(output)
-
-
-def output_string(dic, json_flag):
-    """
-        Given a dict dic={key:value} or {key:{cpu : val}}, create the output of
-        the programm and return it as a string. It can be in JSON format if
-        json_flag is True.
-        If it is not in JSON format, the output is :
-        KEY   VALUE or KEY VAL0 VAL1 VAL2 ...
-    """
-    if json_flag:
-        return json.dumps(dic, indent=4)
-
-    res = ""
-    if not dic:
-        return res
-    keys = list(dic.keys())
-    if isinstance(dic[keys[0]], int):
-        for k in keys:
-            res += "{}    {}\n".format(k, dic[k])
-    else:
-        for k in keys:
-            values = list(dic[k].values())
-            res += k + "    "
-            res += "    ".join(['{}'.format(val) for val in values]) + "\n"
-    return res[0:len(res) - 1]
-
-
-def map_dump(ebpf_map, path, map_type, json_flag, cpu_flag):
-    """
-        Print the dump of the eBPF map given or store it into a JSON file.
-
-        :param ebpf_map: path to the eBPF map
-        :param path: path to the file in which the dump will be stored,
-                     None if the dump is displayed on stdout.
-        :param map_type: 'ip' or 'uniq', type of data stored in the map
-        :param json_flag: A boolean that indicates if the output is in JSON
-                          format.
-        :param cpu_flag: A boolean that indicates if the value per cpu are
-                         displayed (True) or if it is their sum. Do nothing if
-                         the eBPF map have not the value per each cpu.
-
-        :return: None
-    """
-    call = subprocess.run(["bpftool", "map", "dump", "pinned", ebpf_map, "-j"],
-                          encoding='utf-8', stdout=subprocess.PIPE)
-
-    if call.returncode != 0:
-        exit_bpf_error(call.stdout)
-
-    dump = json.loads(call.stdout)
-    dic = parse_json_output(dump, map_type, cpu_flag)
-    if map_type == 'uniq':
-        output = dic[0]
-    else:
-        output = output_string(dic, json_flag)
-    if path is None:
-        print(output)
-    else:
-        with open(path, 'w') as file:
-            file.write(output)
-            file.close()
-
-
-def map_get(ebpf_map, key, map_type, json_flag, cpu_flag):
-    """
-        Chek if an IP address is in the eBPF map given, if it is, display its
-        value, else exit with an error.
-
-        :param ebpf_map: path to the eBPF map
-        :param key: the ip to check(ipaddress)
-        :param map_type: 'ip' or 'uniq', type of data stored in the map
-        :param cpu_flag: A boolean that indicated if the value per cpu are
-                         displayed(True) or if it is their sum. Do nothing if
-                         the eBPF map have not a value per each cpu.
-        :param json_flag: A boolean that indicates if the output is in JSON
-                          format.
-
-        :return: None
-    """
-    command = command_action(ebpf_map, "lookup", key)
-    command.append("-p")
-    call = subprocess.run(command, encoding='utf-8', stdout=subprocess.PIPE)
-    if call.returncode != 0:
-        exit_bpf_error(call.stdout)
-
-    res = call.stdout
-    ip_str = str(ip_ntohl(key))
-    if res == "null\n":
-        sys.exit("The key {} is not in the map {}.".format(ip_str, map))
-
-    output = parse_json_output(json.loads(res), map_type, cpu_flag)
-    print(output_string(output, json_flag))
-
-
 def main():
     args = arg_parse()
 
     if shutil.which("bpftool") is None:
         sys.exit("Bpftool not found.")
 
-    ebpf_map = args.map[0]
-    if args.map_type == 'ip':
-        add_ips = list(map(lambda pos: pos[0], args.add))
-        add_value = list(map(lambda pos: pos[1], args.add))
-        map_modification(ebpf_map, "update", add_ips, add_value)
-        map_modification(ebpf_map, "delete", args.remove)
+    path_to_map = args.map[0]
+    if args.map_type == 'ipv4':
+        nemap = MapIpv4(path_to_map, args.json, args.cpu)
+        nemap.add(args.add)
+        nemap.remove(args.remove)
         if args.get != False:
-            map_get(ebpf_map, args.get[0], args.map_type, args.json, args.cpu)
+            nemap.get(args.get[0])
         if args.dump != False:
-            map_dump(ebpf_map, args.dump, args.map_type, args.json, args.cpu)
+            nemap.dump(args.dump)
     else:
-        set_ip = list(map(lambda pos: pos[0], args.set))
-        set_value = list(map(lambda pos: pos[1], args.set))
-        map_modification(ebpf_map, "update", set_ip, set_value)
+        nemap = MapUniq(path_to_map, args.json)
+        if args.set != []:
+            nemap.set(args.set[0])
         if args.dump != False:
-            map_dump(ebpf_map, args.dump, args.map_type, args.json, False)
+            nemap.dump(args.dump)
 
 
 if __name__ == '__main__':
