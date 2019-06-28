@@ -57,7 +57,7 @@ class Ipv4:
     def ntohl(self):
         """transform self.ipaddress by applicating of the ntohl on it"""
         ip_int = int(self.ipaddress)
-        self.ipaddress = ipaddress.ip_address(socket.ntohl(ip_int))
+        return ipaddress.ip_address(socket.ntohl(ip_int))
 
     def to_str(self):
         """:return: the ipaddress as a string"""
@@ -103,10 +103,6 @@ class HexArray:
 
 
 class Map:
-    """
-        todo
-    """
-
     def __init__(self, path_to_map, map_type, json_bool=False, cpu_bool=False):
         self.path = path_to_map
         self.type = map_type
@@ -162,6 +158,10 @@ class Map:
             return vals
         return sum(vals.values())
 
+    def __key_transformation_to_ip(self, ip_hexarray):
+        ip_addr = ip_hexarray.to_ip()
+        return ip_addr.to_str()
+
     def _parse_json_output(self, json_output):
         """
             Parse a json output of a bpftool command, transform it in a
@@ -172,7 +172,7 @@ class Map:
             :return: a dictionnary
         """
         key_transformation = {
-            'ipv4': (lambda key: key.to_ip().to_str()),
+            'ipv4': self.__key_transformation_to_ip,
             'uniq': (lambda key: key.to_int())}
 
         output = []
@@ -245,6 +245,28 @@ class Map:
             file.close()
 
 
+def ipv4_obj_convertion(ip_str):
+    """Return an Ipv4 object or exit with an eror if it is not a ipaddress"""
+    try:
+        ip_addr = Ipv4(ip_str)
+    except ValueError:
+        sys.exit(
+            "ValueError: {} does not appear to be an IPv4 address".format(ip_str))
+    else:
+        return ip_addr
+
+
+def u32_obj_convertion(val_str):
+    """Return an U32 object or exit with an eror if it is not an int"""
+    try:
+        val_u32 = U32(val_str)
+    except ValueError:
+        sys.exit(
+            "ValueError: {} does not appear to be an int".format(val_str))
+    else:
+        return val_u32
+
+
 class MapIpv4(Map):
     """
         Maps in which keys are IPv4 addresses.
@@ -253,27 +275,40 @@ class MapIpv4(Map):
     def __init__(self, path_to_map, json_bool=False, cpu_bool=False):
         Map.__init__(self, path_to_map, 'ipv4', json_bool, cpu_bool)
 
-    def add(self, array_ip_val):
+    def __add_conversion(self, ipval):
+        """ Conter a list of "ip=value" into a list of [Ipv4, U32]"""
+        res = []
+        for couple in ipval:
+            ip_val = couple.split("=")
+            if len(ip_val) == 1:
+                ip_val.append('')
+            ip_val[0] = ipv4_obj_convertion(ip_val[0])
+            ip_val[1] = u32_obj_convertion(ip_val[1])
+            res.append(ip_val)
+        return res
+
+    def add(self, ip_val):
         """
             Add all the ips given in the map with their associated value.
 
-            :param array_ip_val: a list of array [ip, value] with ip a Ipv4 object
-                                 and value a U32 object
+            :param ip_val: a list of "ip=value"
             :return: None
         """
+        array_ip_val = self.__add_conversion(ip_val)
         add_ips = list(map(lambda pos: pos[0].to_byte_array(), array_ip_val))
         add_vals = list(
-            map(lambda pos: (pos[1]).to_byte_array(), array_ip_val))
+            map(lambda pos: pos[1].to_byte_array(), array_ip_val))
         self._modification("update", add_ips, add_vals)
 
-    def remove(self, ips):
+    def remove(self, ips_str):
         """
             Remove all the ips given of the maps.
 
-            :param ips: a list of Ipv4 objects
+            :param ips_str: a list of IPv4 adresses (str).
             :return: None
         """
-        ips_bytes = list(map(lambda pos: pos.to_byte_array(), ips))
+        ips_bytes = list(
+            map(lambda pos: ipv4_obj_convertion(pos).to_byte_array(), ips_str))
         self._modification("delete", ips_bytes)
 
     def get(self, ip_key):
@@ -284,7 +319,8 @@ class MapIpv4(Map):
             :param ip_key: the ip to check (Ipv4 object)
             :return: None
         """
-        command = self._command_action("lookup", ip_key.to_byte_array())
+        ip_obj = ipv4_obj_convertion(ip_key)
+        command = self._command_action("lookup", ip_obj.to_byte_array())
         command.append("-p")
         call = subprocess.run(command, encoding='utf-8',
                               stdout=subprocess.PIPE)
@@ -312,5 +348,5 @@ class MapUniq(Map):
     def set(self, val):
         """Set the value of the map at val. val is a U32 object"""
         key = U32(0).to_byte_array()
-        print(type(val))
-        self._modification("update", [key], [val.to_byte_array()])
+        val_u32 = u32_obj_convertion(val)
+        self._modification("update", [key], [val_u32.to_byte_array()])

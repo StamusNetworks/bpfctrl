@@ -20,37 +20,7 @@ import argparse
 import shutil
 import sys
 
-from bpfctrl import Ipv4, U32, MapIpv4, MapUniq
-
-
-def ip_object(ip_str):
-    """Convert a string an Ipv4 object and return it"""
-    return Ipv4(ip_str)
-
-
-def u32_object(val):
-    """
-        Transform a value (an string of uint 32) into an array of 4 str(int)
-        corresponding of the value of each byte.
-    """
-    return U32(val)
-
-
-def array_ip_u32_objects(ipval):
-    """
-        Convert a string into an IP address and the value associated.
-
-        :param ipval: a string like 'ip=value'
-
-        :return: an array like [ip, value] with ip an Ipv4 object and value a
-                 U32 object
-    """
-    res = ipval.split('=')
-    if len(res) == 1:
-        res.append('')
-    res[0] = ip_object(res[0])
-    res[1] = u32_object(res[1])
-    return res
+from bpfctrl import MapIpv4, MapUniq
 
 
 def ip_subparser_creation(subparsers):
@@ -79,14 +49,13 @@ def ip_subparser_creation(subparsers):
     actions_ip = parser_ip.add_argument_group(
         title='ACTIONS', description=des['actions-ip'])
     actions_ip.add_argument('-a', '--add', metavar=('IP=value'), nargs='+',
-                            type=array_ip_u32_objects, default=[], help=des['add'])
+                            default=[], help=des['add'])
     actions_ip.add_argument('-r', '--remove', metavar=('IP'), nargs='+',
-                            type=ip_object, default=[],
-                            help=des['remove'])
+                            default=[], help=des['remove'])
     actions_ip.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                             default=False, help=des['dump'])
     actions_ip.add_argument('-g', '--get', nargs=1, metavar=('IP'),
-                            type=ip_object, default=False, help=des['get'])
+                            default=False, help=des['get'])
     parser_ip.add_argument('--cpu', action='store_true',
                            default=False, help=des['cpu'])
     parser_ip.add_argument('--json', action='store_true',
@@ -113,8 +82,7 @@ def uniq_subparser_creation(subparsers):
     actions_uniq = parser_uniq.add_argument_group(
         title='ACTIONS', description=des['actions-uniq'])
     actions_uniq.add_argument('-s', '--set', metavar=('value'),
-                              nargs=1, default=[], type=u32_object,
-                              help=des['uniq'])
+                              nargs=1, default=[], help=des['uniq'])
     actions_uniq.add_argument('-d', '--dump', nargs='?', metavar=('<path>'),
                               default=False, help=des['dump'])
     parser_uniq.add_argument('--json', action='store_true',

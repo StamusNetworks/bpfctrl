@@ -6,11 +6,11 @@ from setuptools import setup
 
 setup(
     name="bpfctrl",
-    version="0.1",
+    version="0.2",
     description="A bpftool wrapper to handle eBPF maps.",
     install_requires=['argparse', 'ipaddress'],
     packages=['bpfctrl'],
-    package_dir={'bpfctrl':'src'},
+    package_dir={'bpfctrl': 'src'},
     scripts=['bpfctrl'],
     provides=['bpfctrl'],
     classifiers=[
