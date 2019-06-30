@@ -24,22 +24,6 @@ import subprocess
 import sys
 
 
-def exit_bpf_error(errno, error):
-    """
-        Exit with the error returned by bpf.
-
-        :param stdout: output of the bpftool command like :
-                       '{"error":"bpf obj get (/sys/fs/bpf): Permission
-                        denied"}\n'
-    """
-    error = error.replace('"', "").replace("\n", "")
-    if error == "null":
-        sys.exit("invalid parameter or not found")
-
-    error_split = error[1:].split(":")
-    exit_message = error_split[2].replace("}", "")
-    sys.exit(exit_message.lstrip())
-
 
 class Ipv4:
     """
@@ -118,6 +102,32 @@ class Map:
     def __unicode__(self):
         return self.path
 
+    def u32_obj_convertion(self, val_str):
+        """Return an U32 object or exit with an eror if it is not an int"""
+        try:
+            val_u32 = U32(val_str)
+        except ValueError:
+            sys.exit(
+                "ValueError: {} does not appear to be an int".format(val_str))
+        else:
+            return val_u32
+
+    def exit_bpf_error(self, errno, error):
+        """
+            Exit with the error returned by bpf.
+    
+            :param stdout: output of the bpftool command like :
+                           '{"error":"bpf obj get (/sys/fs/bpf): Permission
+                            denied"}\n'
+        """
+        error = error.replace('"', "").replace("\n", "")
+        if error == "null":
+            sys.exit("invalid parameter or not found")
+    
+        error_split = error[1:].split(":")
+        exit_message = error_split[2].replace("}", "")
+        sys.exit(exit_message.lstrip())
+
     def _command_action(self, action, key):
         """Create a list of commands to do action on the map with the key"""
         command = ["bpftool", "map", action, "pinned", self.path, "key"]
@@ -145,7 +155,7 @@ class Map:
             call = subprocess.run(command, encoding='utf-8',
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if call.returncode != 0:
-                exit_bpf_error(call.returncode, call.stderr)
+                self.exit_bpf_error(call.returncode, call.stderr)
 
     def __cpu_parse(self, json_result, dict_bool):
         """
@@ -238,7 +248,7 @@ class Map:
                               encoding='utf-8', stdout=subprocess.PIPE)
 
         if call.returncode != 0:
-            exit_bpf_error(call.returncode, call.stderr)
+            self.exit_bpf_error(call.returncode, call.stderr)
 
         dump = json.loads(call.stdout)
         dic = self._parse_json_output(dump)
@@ -254,28 +264,6 @@ class Map:
             file.close()
 
 
-def ipv4_obj_convertion(ip_str):
-    """Return an Ipv4 object or exit with an eror if it is not a ipaddress"""
-    try:
-        ip_addr = Ipv4(ip_str)
-    except ValueError:
-        sys.exit(
-            "ValueError: {} does not appear to be an IPv4 address".format(ip_str))
-    else:
-        return ip_addr
-
-
-def u32_obj_convertion(val_str):
-    """Return an U32 object or exit with an eror if it is not an int"""
-    try:
-        val_u32 = U32(val_str)
-    except ValueError:
-        sys.exit(
-            "ValueError: {} does not appear to be an int".format(val_str))
-    else:
-        return val_u32
-
-
 class MapIpv4(Map):
     """
         Maps in which keys are IPv4 addresses.
@@ -284,6 +272,16 @@ class MapIpv4(Map):
     def __init__(self, path_to_map, json_bool=False, cpu_bool=False):
         Map.__init__(self, path_to_map, 'ipv4', json_bool, cpu_bool)
 
+    def ipv4_obj_convertion(self, ip_str):
+        """Return an Ipv4 object or exit with an eror if it is not a ipaddress"""
+        try:
+            ip_addr = Ipv4(ip_str)
+        except ValueError:
+            sys.exit(
+                "ValueError: {} does not appear to be an IPv4 address".format(ip_str))
+        else:
+            return ip_addr
+
     def __add_conversion(self, ipval):
         """ Conter a list of "ip=value" into a list of [Ipv4, U32]"""
         res = []
@@ -291,8 +289,8 @@ class MapIpv4(Map):
             ip_val = couple.split("=")
             if len(ip_val) == 1:
                 ip_val.append('')
-            ip_val[0] = ipv4_obj_convertion(ip_val[0])
-            ip_val[1] = u32_obj_convertion(ip_val[1])
+            ip_val[0] = self.ipv4_obj_convertion(ip_val[0])
+            ip_val[1] = self.u32_obj_convertion(ip_val[1])
             res.append(ip_val)
         return res
 
@@ -317,7 +315,7 @@ class MapIpv4(Map):
             :return: None
         """
         ips_bytes = list(
-            map(lambda pos: ipv4_obj_convertion(pos).to_byte_array(), ips_str))
+            map(lambda pos: self.ipv4_obj_convertion(pos).to_byte_array(), ips_str))
         self._modification("delete", ips_bytes)
 
     def get(self, ip_key):
@@ -328,7 +326,7 @@ class MapIpv4(Map):
             :param ip_key: the ip to check (Ipv4 object)
             :return: None
         """
-        ip_obj = ipv4_obj_convertion(ip_key)
+        ip_obj = self.ipv4_obj_convertion(ip_key)
         command = self._command_action("lookup", ip_obj.to_byte_array())
         command.append("-p")
         call = subprocess.run(command, encoding='utf-8',
@@ -340,7 +338,7 @@ class MapIpv4(Map):
                 sys.exit("The key {} is not in the map {}.".format(
                     ip_key, self))
             else:
-                exit_bpf_error(call.returncode, call.stdout)
+                self.exit_bpf_error(call.returncode, call.stdout)
 
         output = self._parse_json_output(json.loads(res))
         print(self._output_string(output))
@@ -357,5 +355,5 @@ class MapUniq(Map):
     def set(self, val):
         """Set the value of the map at val. val is a U32 object"""
         key = U32(0).to_byte_array()
-        val_u32 = u32_obj_convertion(val)
+        val_u32 = self.u32_obj_convertion(val)
         self._modification("update", [key], [val_u32.to_byte_array()])
