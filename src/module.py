@@ -22,7 +22,21 @@ import json
 import socket
 import subprocess
 import sys
+import shutil
 
+
+class BpfException(BaseException):
+    """
+    Generic class for bpfctrl exception
+    """
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return self.value
+
+    def __unicode__(self):
+        return self.value
 
 
 class Ipv4:
@@ -95,6 +109,8 @@ class Map:
         self.type = map_type
         self.json = json_bool
         self.cpu = cpu_bool
+        if shutil.which("bpftool") is None:
+            raise BpfException("Bpftool not found")
 
     def __str__(self):
         return self.path
@@ -107,7 +123,7 @@ class Map:
         try:
             val_u32 = U32(val_str)
         except ValueError:
-            sys.exit(
+            raise BpfException(
                 "ValueError: {} does not appear to be an int".format(val_str))
         else:
             return val_u32
@@ -122,11 +138,11 @@ class Map:
         """
         error = error.replace('"', "").replace("\n", "")
         if error == "null":
-            sys.exit("invalid parameter or not found")
+            raise BpfException("invalid parameter or not found")
     
         error_split = error[1:].split(":")
         exit_message = error_split[2].replace("}", "")
-        sys.exit(exit_message.lstrip())
+        raise BpfException(exit_message.lstrip())
 
     def _command_action(self, action, key):
         """Create a list of commands to do action on the map with the key"""
@@ -277,7 +293,7 @@ class MapIpv4(Map):
         try:
             ip_addr = Ipv4(ip_str)
         except ValueError:
-            sys.exit(
+            raise BpfException(
                 "ValueError: {} does not appear to be an IPv4 address".format(ip_str))
         else:
             return ip_addr
@@ -335,7 +351,7 @@ class MapIpv4(Map):
         res = call.stdout
         if call.returncode != 0:
             if call.returncode == 255 and res == "null\n":
-                sys.exit("The key {} is not in the map {}.".format(
+                raise BpfException("The key {} is not in the map {}.".format(
                     ip_key, self))
             else:
                 self.exit_bpf_error(call.returncode, call.stdout)

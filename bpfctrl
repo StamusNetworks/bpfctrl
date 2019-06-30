@@ -17,10 +17,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 import argparse
-import shutil
 import sys
 
-from bpfctrl import MapIpv4, MapUniq
+from bpfctrl import MapIpv4, MapUniq, BpfException
 
 
 def ip_subparser_creation(subparsers):
@@ -146,27 +145,40 @@ def arg_parse():
 def main():
     args = arg_parse()
 
-    if shutil.which("bpftool") is None:
-        sys.exit("Bpftool not found.")
-
     path_to_map = args.map[0]
     if args.map_type == 'ipv4':
-        nemap = MapIpv4(path_to_map, args.json, args.cpu)
-        nemap.add(args.add)
-        nemap.remove(args.remove)
+        try:
+            nemap = MapIpv4(path_to_map, args.json, args.cpu)
+            nemap.add(args.add)
+            nemap.remove(args.remove)
+        except BpfException as error:
+            sys.stderr.write(str(error) + "\n")
+            sys.exit(1)
         if args.get != False:
-            output = nemap.get(args.get[0])
-            print(output)
+            try:
+                output = nemap.get(args.get[0])
+                print(output)
+            except BpfException as error:
+                sys.stderr.write(str(error) + "\n")
+                sys.exit(1)
         if args.dump != False:
-            output = nemap.dump(args.dump)
-            print(output)
+            try:
+                output = nemap.dump(args.dump)
+                print(output)
+            except BpfException as error:
+                sys.stderr.write(str(error) + "\n")
+                sys.exit(1)
     else:
-        nemap = MapUniq(path_to_map, args.json)
-        if args.set != []:
-            nemap.set(args.set[0])
-        if args.dump != False:
-            output = nemap.dump(args.dump)
-            print(output)
+        try:
+            nemap = MapUniq(path_to_map, args.json)
+            if args.set != []:
+                nemap.set(args.set[0])
+            if args.dump != False:
+                output = nemap.dump(args.dump)
+                print(output)
+        except BpfException as error:
+            sys.stderr.write(str(error) + "\n")
+            sys.exit(1)
 
 
 if __name__ == '__main__':
