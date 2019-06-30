@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 
-def exit_bpf_error(stdout):
+def exit_bpf_error(errno, error):
     """
         Exit with the error returned by bpf.
 
@@ -32,9 +32,12 @@ def exit_bpf_error(stdout):
                        '{"error":"bpf obj get (/sys/fs/bpf): Permission
                         denied"}\n'
     """
-    stdout = stdout.replace('"', "").replace("\n", "")
-    stdout_split = stdout[1:].split(":")
-    exit_message = stdout_split[2].replace("}", "")
+    error = error.replace('"', "").replace("\n", "")
+    if error == "null":
+        sys.exit("invalid parameter or not found")
+
+    error_split = error[1:].split(":")
+    exit_message = error_split[2].replace("}", "")
     sys.exit(exit_message.lstrip())
 
 
@@ -109,6 +112,12 @@ class Map:
         self.json = json_bool
         self.cpu = cpu_bool
 
+    def __str__(self):
+        return self.path
+
+    def __unicode__(self):
+        return self.path
+
     def _command_action(self, action, key):
         """Create a list of commands to do action on the map with the key"""
         command = ["bpftool", "map", action, "pinned", self.path, "key"]
@@ -136,7 +145,7 @@ class Map:
             call = subprocess.run(command, encoding='utf-8',
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if call.returncode != 0:
-                exit_bpf_error(call.stderr)
+                exit_bpf_error(call.returncode, call.stderr)
 
     def __cpu_parse(self, json_result, dict_bool):
         """
@@ -229,7 +238,7 @@ class Map:
                               encoding='utf-8', stdout=subprocess.PIPE)
 
         if call.returncode != 0:
-            exit_bpf_error(call.stdout)
+            exit_bpf_error(call.returncode, call.stderr)
 
         dump = json.loads(call.stdout)
         dic = self._parse_json_output(dump)
@@ -324,14 +333,14 @@ class MapIpv4(Map):
         command.append("-p")
         call = subprocess.run(command, encoding='utf-8',
                               stdout=subprocess.PIPE)
-        if call.returncode != 0:
-            exit_bpf_error(call.stdout)
 
         res = call.stdout
-        if res == "null\n":
-            ip_key.ntohl()
-            sys.exit("The key {} is not in the map {}.".format(
-                ip_key.to_str(), map))
+        if call.returncode != 0:
+            if call.returncode == 255 and res == "null\n":
+                sys.exit("The key {} is not in the map {}.".format(
+                    ip_key, self))
+            else:
+                exit_bpf_error(call.returncode, call.stdout)
 
         output = self._parse_json_output(json.loads(res))
         print(self._output_string(output))
