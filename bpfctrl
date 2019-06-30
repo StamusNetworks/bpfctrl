@@ -155,15 +155,18 @@ def main():
         nemap.add(args.add)
         nemap.remove(args.remove)
         if args.get != False:
-            nemap.get(args.get[0])
+            output = nemap.get(args.get[0])
+            print(output)
         if args.dump != False:
-            nemap.dump(args.dump)
+            output = nemap.dump(args.dump)
+            print(output)
     else:
         nemap = MapUniq(path_to_map, args.json)
         if args.set != []:
             nemap.set(args.set[0])
         if args.dump != False:
-            nemap.dump(args.dump)
+            output = nemap.dump(args.dump)
+            print(output)
 
 
 if __name__ == '__main__':

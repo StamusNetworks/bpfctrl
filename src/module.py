@@ -257,7 +257,7 @@ class Map:
         else:
             output = self._output_string(dic)
         if path_to_dump_file is None:
-            print(output)
+            return output
         else:
             with open(path_to_dump_file, 'w') as file:
                 file.write(output)
@@ -341,7 +341,7 @@ class MapIpv4(Map):
                 self.exit_bpf_error(call.returncode, call.stdout)
 
         output = self._parse_json_output(json.loads(res))
-        print(self._output_string(output))
+        return(self._output_string(output))
 
 
 class MapUniq(Map):
