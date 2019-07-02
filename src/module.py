@@ -51,13 +51,13 @@ class Ipv4:
             self.ipaddress = ipaddress.ip_address(ip_add)
 
     def htonl(self):
-        """transform self.ipaddress by applicating of the htonl on it"""
+        """transform self.ipaddress by applying htonl to it"""
         ip_int = int(self.ipaddress)
         self.ipaddress = ipaddress.ip_address(socket.htonl(ip_int))
         return self
 
     def ntohl(self):
-        """transform self.ipaddress by applicating of the ntohl on it"""
+        """transform self.ipaddress by applying ntohl to it"""
         ip_int = int(self.ipaddress)
         self.ipaddresss = ipaddress.ip_address(socket.ntohl(ip_int))
         return self
