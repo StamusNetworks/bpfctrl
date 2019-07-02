@@ -54,11 +54,13 @@ class Ipv4:
         """transform self.ipaddress by applicating of the htonl on it"""
         ip_int = int(self.ipaddress)
         self.ipaddress = ipaddress.ip_address(socket.htonl(ip_int))
+        return self
 
     def ntohl(self):
         """transform self.ipaddress by applicating of the ntohl on it"""
         ip_int = int(self.ipaddress)
-        return ipaddress.ip_address(socket.ntohl(ip_int))
+        self.ipaddresss = ipaddress.ip_address(socket.ntohl(ip_int))
+        return self
 
     def to_str(self):
         """:return: the ipaddress as a string"""
@@ -291,7 +293,7 @@ class MapIpv4(Map):
     def ipv4_obj_convertion(self, ip_str):
         """Return an Ipv4 object or exit with an eror if it is not a ipaddress"""
         try:
-            ip_addr = Ipv4(ip_str)
+            ip_addr = Ipv4(ip_str).htonl()
         except ValueError:
             raise BpfException(
                 "ValueError: {} does not appear to be an IPv4 address".format(ip_str))
