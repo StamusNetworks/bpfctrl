@@ -29,9 +29,9 @@ $ pip3 install .
 
 ## Examples of bpfctrl use
 It can handle eBPF maps where keys are IPV4 addresses, and also maps that contain just one integer and key is 0.
-The type of map has to be precised in the command line with ```ip``` for the first and ```uniq``` for the second.
+The type of map has to be precised in the command line with ```ipv4``` for the first and ```uniq``` for the second.
 ### Map Modification
-#### Ip
+#### Ipv4
 The following command line adds the IPV4 address 1.2.3.4 with the value 1 in the pinned map `/sys/fs/bpf/suricata-wlp4s0-ipv4_drop`.
 ```
 $ sudo bpfctrl -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop ipv4 --add 1.2.3.4=1
@@ -45,7 +45,7 @@ It is possible to add or to remove several addresses at the same time.
 #### Uniq
 The following command line sets the value of the integer contained in the pinned map `/sys/fs/bpf/map` at 1.
 ```
-$ sudo bpfctrl -m /sys/fs/bpf/map ipv4 --set 1
+$ sudo bpfctrl -m /sys/fs/bpf/map uniq --set 1
 ```
 ### Map Access
 With the flag ```--json```, the output of the program and the file written are in JSON format.
@@ -62,7 +62,7 @@ $ sudo bpfctrl -m /sys/fs/bpf/map uniq --dump
 ```
 The result of the dump can be store in a file if its paths is precised. If the file already exists, its content will be overwritten.
 ```
-$ sudo bpfctrl  -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop ip --dump ~/map.txt
+$ sudo bpfctrl  -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop ipv4 --dump ~/map.txt
 ```
 
 #### Ipv4
@@ -83,7 +83,7 @@ $ sudo bpfctrl -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop ipv4 --get 3.3.3.3
 
 ### Combined Commands
 The commands can be combined.
-#### Ip
+#### Ipv4
 First, the program adds the elements and then removes. The dump of the map and the get are done at the end.
 ```
 $ sudo bpfctrl -m /sys/fs/bpf/suricata-wlp4s0-ipv4_drop ipv4 --add 1.2.3.4=1 5.6.7.8=9 --remove 1.2.3.4 --dump --json
