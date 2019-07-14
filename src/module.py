@@ -146,6 +146,18 @@ class Map:
         exit_message = error_split[2].replace("}", "")
         raise BpfException(exit_message.lstrip())
 
+    def _run_command(self, command, encoding='utf-8', stdout=None, stderr=None):
+        if sys.version_info >= (3, 7):
+            call = subprocess.run(command, encoding=encoding,
+                                  stdout=stdout, stderr=stderr)
+        else:
+            call = subprocess.run(command, stdout=stdout, stderr=stderr)
+            if stdout:
+                call.stdout = call.stdout.decode('utf-8')
+            if stderr:
+                call.stderr = call.stderr.decode('utf-8')
+        return call
+
     def _command_action(self, action, key):
         """Create a list of commands to do action on the map with the key"""
         command = ["bpftool", "map", action, "pinned", self.path, "key"]
@@ -170,7 +182,7 @@ class Map:
             if action == "update":
                 command.append("value")
                 command.extend(values[i])
-            call = subprocess.run(command, encoding='utf-8',
+            call = self._run_command(command, encoding='utf-8',
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if call.returncode != 0:
                 self.exit_bpf_error(call.returncode, call.stderr)
@@ -262,7 +274,7 @@ class Map:
                                        None if the dump is displayed on stdout.
             :return: None
         """
-        call = subprocess.run(["bpftool", "map", "dump", "pinned", self.path, "-j"],
+        call = self._run_command(["bpftool", "map", "dump", "pinned", self.path, "-j"],
                               encoding='utf-8', stdout=subprocess.PIPE)
 
         if call.returncode != 0:
@@ -347,7 +359,7 @@ class MapIpv4(Map):
         ip_obj = self.ipv4_obj_convertion(ip_key)
         command = self._command_action("lookup", ip_obj.to_byte_array())
         command.append("-p")
-        call = subprocess.run(command, encoding='utf-8',
+        call = self._run_command(command, encoding='utf-8',
                               stdout=subprocess.PIPE)
 
         res = call.stdout
